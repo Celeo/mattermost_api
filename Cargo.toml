@@ -1,0 +1,24 @@
+[package]
+name = "mattermost_api"
+version = "0.1.0"
+edition = "2021"
+description = ""
+readme = "README.md"
+homepage = ""
+repository = ""
+documentation = ""
+license = "MIT OR Apache-2.0"
+exclude = []
+keywords = []
+categories = []
+
+[dependencies]
+log = "0.4.14"
+reqwest = { version = "0.11.6", features = ["json"] }
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.69"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+mockito = "0.30.0"
+tokio = { version = "1.13.0", features = ["full"] }
