@@ -2,11 +2,11 @@
 name = "mattermost_api"
 version = "0.1.0"
 edition = "2021"
-description = ""
+description = "Rust bindings for the Mattermost API"
 readme = "README.md"
-homepage = ""
-repository = ""
-documentation = ""
+homepage = "https://github.com/Celeo/mattermost_api"
+repository = "https://github.com/Celeo/mattermost_api"
+documentation = "https://docs.rs/mattermost_api"
 license = "MIT OR Apache-2.0"
 exclude = []
 keywords = []
