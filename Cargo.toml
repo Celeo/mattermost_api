@@ -8,9 +8,15 @@ homepage = "https://github.com/Celeo/mattermost_api"
 repository = "https://github.com/Celeo/mattermost_api"
 documentation = "https://docs.rs/mattermost_api"
 license = "MIT OR Apache-2.0"
-exclude = []
-keywords = []
-categories = []
+exclude = [
+  ".github"
+]
+keywords = [
+  "mattermost"
+]
+categories = [
+  "api-bindings"
+]
 
 [dependencies]
 http = "0.2.5"
