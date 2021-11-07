@@ -8,6 +8,18 @@
 //! struct instance along with the URL of the target Mattermost
 //! instance to [`Mattermost::new`].
 //!
+//! # Example
+//!
+//! ```rust,no_run
+//! use mattermost_api::prelude::*;
+//! # async fn run() {
+//! let auth = AuthenticationData::from_password("you@example.com", "password");
+//! let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
+//! api.store_session_token().await.unwrap();
+//! let team_info = api.get_team_info("Best-Team-Ever").await.unwrap();
+//! # }
+//! ```
+//!
 //! [their docs]: https://api.mattermost.com
 //! [`AuthenticationData`]: struct.AuthenticationData.html
 //! [`Mattermost::new`]: struct.Mattermost.html

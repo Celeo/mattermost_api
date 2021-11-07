@@ -20,5 +20,5 @@ pub struct TeamInformation {
     pub allowed_domains: String,
     pub invite_id: String,
     pub allow_open_invite: bool,
-    pub policy_id: String,
+    pub policy_id: Option<String>,
 }

@@ -1,11 +1,14 @@
 //! Main logic
 
 use crate::{models, prelude::*};
+use log::{debug, error};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
-    Client,
+    Client, Method,
 };
+use serde::de::DeserializeOwned;
 use serde_json::json;
+use std::str::FromStr;
 
 /// Authentication data, either a login_id and password
 /// or a personal access token. Required for being able
@@ -48,7 +51,7 @@ impl AuthenticationData {
 
     /// If the auth data is using a personal access token.
     pub fn using_token(&self) -> bool {
-        self.token.is_none()
+        self.token.is_some()
     }
 }
 
@@ -84,8 +87,10 @@ impl Mattermost {
     /// was created with used a personal access token.
     pub async fn store_session_token(&mut self) -> Result<(), ApiError> {
         if self.authentication_data.using_token() {
+            debug!("Using personal access token; getting a session token is a no-op");
             return Ok(());
         }
+        debug!("Getting a session token from login_id and password");
         let url = format!("{}/api/v4/users/login", self.instance_url);
         let resp = self
             .client
@@ -101,6 +106,7 @@ impl Mattermost {
             .get("Token")
             .ok_or_else(|| ApiError::CouldNotGetToken(resp.status().as_u16()))?;
         self.auth_token = Some(session_token.to_str()?.to_string());
+        debug!("Session token retrieved and stored");
         Ok(())
     }
 
@@ -122,18 +128,57 @@ impl Mattermost {
         Ok(map)
     }
 
+    /// Make a query to the Mattermost instance API.
+    ///
+    /// This method is "raw" in that the calling code must
+    /// supply the method, query parameters, body, **and**
+    /// a struct for the shape of the data returned (or
+    /// `serde_json::Value` for "dynamic" data).
+    ///
+    /// Callers are encouraged to look for a specific endpoint
+    /// function that is for the API endpoint that is desired,
+    /// but this function is exposed to calling code so that
+    /// this library can be more flexible.
+    pub async fn query<T: DeserializeOwned>(
+        &self,
+        method: &str,
+        endpoint: &str,
+        query: Option<&[(&str, &str)]>,
+        body: Option<&str>,
+    ) -> Result<T, ApiError> {
+        let url = format!("{}/api/v4/{}", self.instance_url, endpoint);
+        debug!(
+            "Making {} request to {} with query {:?}",
+            method, url, query
+        );
+        let mut req_builder = self
+            .client
+            .request(Method::from_str(method)?, &url)
+            .headers(self.request_headers()?)
+            .query(query.unwrap_or_else(|| &[]));
+        req_builder = match body {
+            Some(b) => req_builder.body(b.to_owned()),
+            None => req_builder,
+        };
+        let resp = self.client.execute(req_builder.build()?).await?;
+        if !resp.status().is_success() {
+            error!(
+                "Got status {} when requesting data from {}",
+                resp.status(),
+                url
+            );
+            return Err(ApiError::InvalidStatusCode(resp.status().as_u16()));
+        }
+        Ok(resp.json().await?)
+    }
+
     // ===========================================================================================
     //      API endpoints
     // ===========================================================================================
 
     /// Get information for a team by its name,
     pub async fn get_team_info(&self, name: &str) -> Result<models::TeamInformation, ApiError> {
-        let resp = self
-            .client
-            .get(&format!("{}/api/v4/teams/name/{}", self.instance_url, name))
-            .headers(self.request_headers()?)
-            .send()
-            .await?;
-        Ok(resp.json().await?)
+        self.query("GET", &format!("teams/name/{}", name), None, None)
+            .await
     }
 }

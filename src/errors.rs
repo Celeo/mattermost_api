@@ -20,4 +20,14 @@ pub enum ApiError {
     /// HTTP header value parsing error
     #[error("HTTP header value parsing error")]
     ReqwestHeaderValueError(#[from] reqwest::header::InvalidHeaderValue),
+    /// Invalid HTTP method
+    #[error("Invalid HTTP method")]
+    HttpMethodError(#[from] http::method::InvalidMethod),
+    /// Error that can be thrown by any function that makes HTTP
+    /// calls to external resources for response codes that
+    /// aren't valid as defined [by reqwest].
+    ///
+    /// [by reqwest]: <https://docs.rs/reqwest/0.11.6/reqwest/struct.StatusCode.html#method.is_success>
+    #[error("Invalid HTTP status code received: {0}")]
+    InvalidStatusCode(u16),
 }
