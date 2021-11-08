@@ -189,9 +189,104 @@ impl Mattermost {
     //      API endpoints
     // ===========================================================================================
 
+    /// Get a team's information.
+    pub async fn get_team(&self, id: &str) -> Result<models::TeamInformation, ApiError> {
+        self.query("GET", &format!("teams/{}", id), None, None)
+            .await
+    }
+
     /// Get information for a team by its name,
-    pub async fn get_team_info(&self, name: &str) -> Result<models::TeamInformation, ApiError> {
+    pub async fn get_team_by_name(&self, name: &str) -> Result<models::TeamInformation, ApiError> {
         self.query("GET", &format!("teams/name/{}", name), None, None)
+            .await
+    }
+
+    /// List teams that are open or, if the user has the "manage_system" permission, exist.
+    pub async fn get_teams(&self) -> Result<Vec<models::TeamInformation>, ApiError> {
+        self.query("GET", "teams", None, None).await
+    }
+
+    /// Get the number of unread messages and mentions for all member teams of the user.
+    pub async fn get_team_unreads_for(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<models::TeamsUnreadInformation>, ApiError> {
+        self.query(
+            "GET",
+            &format!("users/{}/teams/unread", user_id),
+            None,
+            None,
+        )
+        .await
+    }
+
+    /// Get the number of unread messages and mentions for the specific team the user is in.
+    ///
+    /// Requires either the "read_channel" or "edit_other_users" permission.
+    pub async fn get_team_unreads_for_in(
+        &self,
+        user_id: &str,
+        team_id: &str,
+    ) -> Result<models::TeamsUnreadInformation, ApiError> {
+        self.query(
+            "GET",
+            &format!("users/{}/teams/{}/unread", user_id, team_id),
+            None,
+            None,
+        )
+        .await
+    }
+
+    /// Get all channels on the instance.
+    ///
+    /// Requires the "manage_system" permission.
+    pub async fn get_all_channels(
+        &self,
+        not_associated_to_group: Option<&str>,
+        page: Option<u64>,
+        per_page: Option<u64>,
+        exclude_default_channels: Option<bool>,
+        exclude_policy_constrained: Option<bool>,
+    ) -> Result<Vec<models::ChannelInformation>, ApiError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(v) = not_associated_to_group {
+            query.push(("not_associated_to_group", v.to_owned()));
+        }
+        if let Some(v) = page {
+            query.push(("page", v.to_string()));
+        }
+        if let Some(v) = per_page {
+            query.push(("per_page", v.to_string()));
+        }
+        if let Some(v) = exclude_default_channels {
+            query.push(("exclude_default_channels", v.to_string()));
+        }
+        if let Some(v) = exclude_policy_constrained {
+            query.push(("exclude_policy_constrained", v.to_string()));
+        }
+        let query: Vec<(&str, &str)> = query.iter().map(|(a, b)| (*a, &**b)).collect();
+        self.query("GET", "channels", Some(&query), None).await
+    }
+
+    /// Get a channel's information.
+    ///
+    /// Requires the "read_channel" permission for that channel.
+    pub async fn get_channel(
+        &self,
+        channel_id: &str,
+    ) -> Result<models::ChannelInformation, ApiError> {
+        self.query("GET", &format!("channels/{}", channel_id), None, None)
+            .await
+    }
+
+    /// Get public channels' information.
+    ///
+    /// Requires the "list_team_channels" permission.
+    pub async fn get_public_channels(
+        &self,
+        team_id: &str,
+    ) -> Result<Vec<models::ChannelInformation>, ApiError> {
+        self.query("GET", &format!("teams/{}/channels", team_id), None, None)
             .await
     }
 }

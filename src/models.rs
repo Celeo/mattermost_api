@@ -36,3 +36,17 @@ pub struct TeamInformation {
     pub allow_open_invite: bool,
     pub policy_id: Option<String>,
 }
+
+/// Response struct from /users/{user_id}/teams/unread
+#[derive(Debug, Deserialize)]
+pub struct TeamsUnreadInformation {
+    pub teams_id: String,
+    pub msg_count: u64,
+    pub mention_count: u64,
+}
+
+/// Information about a single channel on the instance.
+#[derive(Debug, Deserialize)]
+pub struct ChannelInformation {
+    //
+}
