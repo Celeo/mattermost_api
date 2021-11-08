@@ -4,8 +4,22 @@
 
 use crate::prelude::*;
 
+/// Error struct from Mattermost.
+///
+/// See [here] for more information.
+///
+/// [here]: https://api.mattermost.com/#tag/errors
+#[derive(Debug, Deserialize)]
+pub struct MattermostError {
+    pub id: String,
+    pub message: String,
+    pub request_id: String,
+    pub status_code: i16,
+    pub is_oauth: bool,
+}
+
 /// Response struct from /teams/name/{name}
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct TeamInformation {
     pub id: String,
     pub create_at: i64,

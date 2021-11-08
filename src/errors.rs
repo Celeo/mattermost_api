@@ -1,5 +1,6 @@
 //! Errors
 
+use crate::models::MattermostError;
 use thiserror::Error;
 
 /// Errors that may arise over the course of using the library.
@@ -23,11 +24,11 @@ pub enum ApiError {
     /// Invalid HTTP method
     #[error("Invalid HTTP method")]
     HttpMethodError(#[from] http::method::InvalidMethod),
-    /// Error that can be thrown by any function that makes HTTP
-    /// calls to external resources for response codes that
-    /// aren't valid as defined [by reqwest].
-    ///
-    /// [by reqwest]: <https://docs.rs/reqwest/0.11.6/reqwest/struct.StatusCode.html#method.is_success>
-    #[error("Invalid HTTP status code received: {0}")]
-    InvalidStatusCode(u16),
+    /// HTTP status code error from the Mattermost instance. See
+    /// the enum's contained struct for information about the error.
+    #[error("Mattermost API returned error: {0:?}")]
+    MattermostApiError(MattermostError),
+    /// Non-standard remote status code error
+    #[error("Non-standard remote status code error")]
+    StatusCodeError(u16),
 }

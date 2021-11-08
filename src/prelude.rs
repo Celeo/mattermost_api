@@ -4,4 +4,5 @@
 
 pub use crate::client::{AuthenticationData, Mattermost};
 pub use crate::errors::ApiError;
-pub(crate) use serde::{Deserialize, Serialize};
+pub use crate::models::MattermostError;
+pub(crate) use serde::Deserialize;

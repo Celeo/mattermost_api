@@ -167,9 +167,22 @@ impl Mattermost {
                 resp.status(),
                 url
             );
-            return Err(ApiError::InvalidStatusCode(resp.status().as_u16()));
+            let status = resp.status().as_u16();
+            // attempt to get the standard error information out and return that
+            if let Ok(text) = resp.text().await {
+                if let Ok(data) = serde_json::from_str::<MattermostError>(&text) {
+                    return Err(ApiError::MattermostApiError(data));
+                }
+            }
+            // fallback to generic HTTP status code error
+            return Err(ApiError::StatusCodeError(status));
         }
         Ok(resp.json().await?)
+    }
+
+    /// TODO
+    pub async fn connect_to_websocket(&mut self) -> Result<(), ApiError> {
+        unimplemented!()
     }
 
     // ===========================================================================================
