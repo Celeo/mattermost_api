@@ -165,7 +165,7 @@ impl Mattermost {
             .client
             .request(Method::from_str(method)?, &url)
             .headers(self.request_headers()?)
-            .query(query.unwrap_or_else(|| &[]));
+            .query(query.unwrap_or(&[]));
         req_builder = match body {
             Some(b) => req_builder.body(b.to_owned()),
             None => req_builder,
