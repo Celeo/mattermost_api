@@ -109,9 +109,8 @@ impl Mattermost {
     /// use mattermost_api::prelude::*;
     /// # async fn run() {
     /// let auth = AuthenticationData::from_password("you@example.com", "password");
-    /// let api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
     /// api.store_session_token().await.unwrap();
-    /// api.connect_to_websocket(Handler {}).await.unwrap();
     /// # }
     /// ```
     pub async fn store_session_token(&mut self) -> Result<(), ApiError> {
