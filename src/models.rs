@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::prelude::*;
+use serde::Deserialize;
 
 /// Error struct from Mattermost.
 ///

@@ -1,6 +1,9 @@
 //! Main logic
 
 use crate::{models, prelude::*};
+use async_trait::async_trait;
+use async_tungstenite::tungstenite::Message;
+use futures_util::{SinkExt, StreamExt};
 use log::{debug, error};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
@@ -53,6 +56,13 @@ impl AuthenticationData {
     pub fn using_token(&self) -> bool {
         self.token.is_some()
     }
+}
+
+/// Handler trait for receving websocket messages.
+#[async_trait]
+pub trait WebsocketHandler: Send + Sync {
+    /// Function to implement to receive websocket messages.
+    async fn callback(&self, _message: Message) {}
 }
 
 /// Struct to interact with a Mattermost instance API.
@@ -180,9 +190,45 @@ impl Mattermost {
         Ok(resp.json().await?)
     }
 
-    /// TODO
-    pub async fn connect_to_websocket(&mut self) -> Result<(), ApiError> {
-        unimplemented!()
+    /// Connect to the websocket API on the instance.
+    ///
+    /// This method loops, sending messages received from
+    /// the websocket connection to the passed handler.
+    ///
+    /// This function handles the authentication handshake,
+    /// but nothing else, yet.
+    pub async fn connect_to_websocket<H: WebsocketHandler + 'static>(
+        &mut self,
+        handler: H,
+    ) -> Result<(), ApiError> {
+        let url = format!("{}/api/v4/websocket", self.instance_url).replace("https", "wss");
+        let (mut stream, _response) = async_tungstenite::tokio::connect_async(url).await?;
+        stream
+            .send(Message::Text(serde_json::to_string(&json!({
+              "seq": 1,
+              "action": "authentication_challenge",
+              "data": {
+                "token": self.auth_token.as_ref().unwrap()
+              }
+            }))?))
+            .await?;
+        loop {
+            if let Some(event) = stream.next().await {
+                match event {
+                    Ok(message) => match message {
+                        Message::Text(_) => handler.callback(message).await,
+                        Message::Binary(_) => debug!("Websocket binary message"),
+                        Message::Ping(_) => debug!("Websocket ping message"),
+                        Message::Pong(_) => debug!("Websocket pong message"),
+                        Message::Close(_) => break,
+                    },
+                    Err(e) => {
+                        error!("Error getting data from websocket: {}", e);
+                    }
+                }
+            };
+        }
+        Ok(())
     }
 
     // ===========================================================================================
