@@ -58,7 +58,27 @@ impl AuthenticationData {
     }
 }
 
-/// Handler trait for receving websocket messages.
+/// Handler trait for receiving websocket messages.
+///
+/// Implement on a struct you create, and pass to
+/// `connect_to_websocket` to connect to your
+/// Mattermost instance's websocket API.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use async_trait::async_trait;
+/// use async_tungstenite::tungstenite::Message;
+/// use mattermost_api::prelude::*;
+///
+/// struct Handler {}
+///
+/// #[async_trait]
+/// impl WebsocketHandler for Handler {
+///     async fn callback(&self, message: Message) {
+///         println!("{}", message);
+///     }
+/// }
 #[async_trait]
 pub trait WebsocketHandler: Send + Sync {
     /// Function to implement to receive websocket messages.
@@ -193,10 +213,37 @@ impl Mattermost {
     /// Connect to the websocket API on the instance.
     ///
     /// This method loops, sending messages received from
-    /// the websocket connection to the passed handler.
+    /// the websocket connection to the passed handler. The
+    /// authentication handshake is handled with the
+    /// connection is made, but otherwise no handling of
+    /// messages is currently implemented.
     ///
-    /// This function handles the authentication handshake,
-    /// but nothing else, yet.
+    /// This function is likely to experience a great
+    /// deal of change soon.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use async_trait::async_trait;
+    /// use async_tungstenite::tungstenite::Message;
+    /// use mattermost_api::prelude::*;
+    ///
+    /// struct Handler {}
+    ///
+    /// #[async_trait]
+    /// impl WebsocketHandler for Handler {
+    ///     async fn callback(&self, message: Message) {
+    ///         println!("{}", message);
+    ///     }
+    /// }
+    ///
+    /// # async fn run() {
+    /// let auth = AuthenticationData::from_password("you@example.com", "password");
+    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// api.store_session_token().await.unwrap();
+    /// api.connect_to_websocket(Handler {}).await.unwrap();
+    /// # }
+    /// ```
     pub async fn connect_to_websocket<H: WebsocketHandler + 'static>(
         &mut self,
         handler: H,
