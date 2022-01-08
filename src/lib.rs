@@ -32,3 +32,6 @@ pub mod client;
 pub mod errors;
 pub mod models;
 pub mod prelude;
+pub mod socket;
+/// Re-exported since websocket events have untyped data for now
+pub use serde_json::Value;

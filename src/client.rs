@@ -1,7 +1,6 @@
-//! Main logic
+//! Client struct and functions for interacting with the REST API.
 
 use crate::{models, prelude::*};
-use async_trait::async_trait;
 use async_tungstenite::tungstenite::Message;
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error};
@@ -16,6 +15,9 @@ use std::str::FromStr;
 /// Authentication data, either a login_id and password
 /// or a personal access token. Required for being able
 /// to make calls to a Mattermost instance API.
+///
+/// Use `from_password` and `from_access_token` to create
+/// an instance of this struct.
 ///
 /// For more information, see the
 /// [Mattermost docs](https://api.mattermost.com/#tag/authentication).
@@ -58,34 +60,9 @@ impl AuthenticationData {
     }
 }
 
-/// Handler trait for receiving websocket messages.
-///
-/// Implement on a struct you create, and pass to
-/// `connect_to_websocket` to connect to your
-/// Mattermost instance's websocket API.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use async_trait::async_trait;
-/// use async_tungstenite::tungstenite::Message;
-/// use mattermost_api::prelude::*;
-///
-/// struct Handler {}
-///
-/// #[async_trait]
-/// impl WebsocketHandler for Handler {
-///     async fn callback(&self, message: Message) {
-///         println!("{}", message);
-///     }
-/// }
-#[async_trait]
-pub trait WebsocketHandler: Send + Sync {
-    /// Function to implement to receive websocket messages.
-    async fn callback(&self, _message: Message) {}
-}
-
 /// Struct to interact with a Mattermost instance API.
+///
+/// Use the `new` function to create an instance of this struct.
 #[derive(Debug)]
 pub struct Mattermost {
     pub(crate) instance_url: String,
@@ -99,6 +76,16 @@ impl Mattermost {
     ///
     /// The `instance_url` variable should be the root URL of your Mattermost
     /// instance.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use mattermost_api::prelude::*;
+    /// # async fn run() {
+    /// let auth = AuthenticationData::from_password("you@example.com", "password");
+    /// let api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// # }
+    /// ```
     pub fn new(instance_url: &str, authentication_data: AuthenticationData) -> Self {
         let auth_token = authentication_data.token.clone();
         Self {
@@ -115,6 +102,18 @@ impl Mattermost {
     ///
     /// Does nothing if the `AuthenticationData` this struct instance
     /// was created with used a personal access token.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use mattermost_api::prelude::*;
+    /// # async fn run() {
+    /// let auth = AuthenticationData::from_password("you@example.com", "password");
+    /// let api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// api.store_session_token().await.unwrap();
+    /// api.connect_to_websocket(Handler {}).await.unwrap();
+    /// # }
+    /// ```
     pub async fn store_session_token(&mut self) -> Result<(), ApiError> {
         if self.authentication_data.using_token() {
             debug!("Using personal access token; getting a session token is a no-op");
@@ -165,7 +164,7 @@ impl Mattermost {
     /// a struct for the shape of the data returned (or
     /// `serde_json::Value` for "dynamic" data).
     ///
-    /// Callers are encouraged to look for a specific endpoint
+    /// Developers are encouraged to look for a specific endpoint
     /// function that is for the API endpoint that is desired,
     /// but this function is exposed to calling code so that
     /// this library can be more flexible.
@@ -225,15 +224,14 @@ impl Mattermost {
     ///
     /// ```rust,no_run
     /// use async_trait::async_trait;
-    /// use async_tungstenite::tungstenite::Message;
     /// use mattermost_api::prelude::*;
     ///
     /// struct Handler {}
     ///
     /// #[async_trait]
     /// impl WebsocketHandler for Handler {
-    ///     async fn callback(&self, message: Message) {
-    ///         println!("{}", message);
+    ///     async fn callback(&self, message: WebsocketEvent) {
+    ///         println!("{:?}", message);
     ///     }
     /// }
     ///
@@ -263,7 +261,15 @@ impl Mattermost {
             if let Some(event) = stream.next().await {
                 match event {
                     Ok(message) => match message {
-                        Message::Text(_) => handler.callback(message).await,
+                        Message::Text(text) => {
+                            // for now, replies are not sent to the handler
+                            if !text.contains("seq_reply") {
+                                match serde_json::from_str(&text) {
+                                    Ok(as_struct) => handler.callback(as_struct).await,
+                                    Err(e) => error!("Could not parse websocket event JSON: {}", e),
+                                }
+                            }
+                        }
                         Message::Binary(_) => debug!("Websocket binary message"),
                         Message::Ping(_) => debug!("Websocket ping message"),
                         Message::Pong(_) => debug!("Websocket pong message"),
