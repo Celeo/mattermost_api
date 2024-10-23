@@ -1,7 +1,7 @@
 //! Client struct and functions for interacting with the REST API.
 
 use crate::{models, prelude::*};
-use async_tungstenite::tungstenite::Message;
+use async_tungstenite::{tokio::ConnectStream, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error};
 use reqwest::{
@@ -69,6 +69,8 @@ pub struct Mattermost {
     pub(crate) authentication_data: AuthenticationData,
     pub(crate) client: Client,
     pub(crate) auth_token: Option<String>,
+    #[cfg(feature = "ws-keep-alive")]
+    pub(crate) ping_interval: std::time::Duration,
 }
 
 impl Mattermost {
@@ -93,7 +95,18 @@ impl Mattermost {
             authentication_data,
             client: Client::new(),
             auth_token,
+            #[cfg(feature = "ws-keep-alive")]
+            ping_interval: std::time::Duration::from_secs(30),
         }
+    }
+
+    #[cfg(feature = "ws-keep-alive")]
+    /// Changes the interval between sending ping messages to keep the websocket connection alive.
+    ///
+    /// The default is 30 seconds.
+    pub fn with_ping_interval(mut self, interval: std::time::Duration) -> Self {
+        self.ping_interval = interval;
+        self
     }
 
     /// Get a session token from the stored login_id and password.
@@ -256,31 +269,98 @@ impl Mattermost {
               }
             }))?))
             .await?;
+
+        self.receive_events(stream, handler).await
+    }
+
+    #[cfg(not(feature = "ws-keep-alive"))]
+    async fn receive_events<H: WebsocketHandler + 'static>(
+        &self,
+        mut stream: WebSocketStream<ConnectStream>,
+        handler: H,
+    ) -> Result<(), ApiError> {
         loop {
             if let Some(event) = stream.next().await {
-                match event {
-                    Ok(message) => match message {
-                        Message::Text(text) => {
-                            // for now, replies are not sent to the handler
-                            if !text.contains("seq_reply") {
-                                match serde_json::from_str(&text) {
-                                    Ok(as_struct) => handler.callback(as_struct).await,
-                                    Err(e) => error!("Could not parse websocket event JSON: {}", e),
-                                }
-                            }
-                        }
-                        Message::Binary(_) => debug!("Websocket binary message"),
-                        Message::Ping(_) => debug!("Websocket ping message"),
-                        Message::Pong(_) => debug!("Websocket pong message"),
-                        Message::Close(_) => break,
-                    },
-                    Err(e) => {
-                        error!("Error getting data from websocket: {}", e);
+                let event = event.map_err(|err| {
+                    error!("Error getting websocket message: {err}");
+                    ApiError::WebsocketError(err)
+                })?;
+
+                if self.handle_event(&handler, event).await? {
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ws-keep-alive")]
+    async fn receive_events<H: WebsocketHandler + 'static>(
+        &self,
+        mut stream: WebSocketStream<ConnectStream>,
+        handler: H,
+    ) -> Result<(), ApiError> {
+        let mut ping_interval = tokio::time::interval(self.ping_interval);
+
+        loop {
+            tokio::select! {
+                Some(event) = stream.next() => {
+                    let event = event.map_err(|err| {
+                        error!("Error getting websocket message: {err}");
+                        ApiError::WebsocketError(err)
+                    })?;
+
+                    if self.handle_event(&handler, event).await? {
+                        break;
+                    }
+                },
+                _ = ping_interval.tick() => {
+                    if let Err(err) = stream.send(Message::Ping(vec![])).await {
+                        error!("Error sending Ping message through websocket: {err}");
                     }
                 }
-            };
+            }
         }
+
         Ok(())
+    }
+
+    /// Internal method to aplly the users handler to text events.
+    ///
+    /// Returns true if the connection is closing.
+    async fn handle_event<H: WebsocketHandler + 'static>(
+        &self,
+        handler: &H,
+        message: Message,
+    ) -> Result<bool, ApiError> {
+        match message {
+            Message::Text(text) if text.contains("seq_reply") => {
+                // for now, replies are not sent to the handler
+                debug!("Reply text message received. Skipping.");
+                Ok(false)
+            }
+            Message::Text(text) => {
+                debug!("Non-reply text message received. Calling handler.");
+
+                let as_struct = serde_json::from_str(&text).map_err(|err| {
+                    error!("Could not parse websocket event JSON: {err}");
+                    ApiError::JsonProcessingError(err)
+                })?;
+
+                handler.callback(as_struct).await;
+
+                Ok(false)
+            }
+            Message::Close(_) => {
+                debug!("Close message received.");
+                Ok(true)
+            }
+            message => {
+                debug!("Non-text, non-close message received: {message:#?}");
+                Ok(false)
+            }
+        }
     }
 
     // ===========================================================================================
