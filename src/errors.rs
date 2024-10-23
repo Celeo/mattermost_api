@@ -27,4 +27,6 @@ pub enum ApiError {
     StatusCodeError(u16),
     #[error("Websocket connection error")]
     WebsocketError(#[from] async_tungstenite::tungstenite::Error),
+    #[error("Url parsing error")]
+    UrlError(#[from] url::ParseError),
 }
