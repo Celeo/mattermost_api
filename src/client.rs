@@ -87,10 +87,10 @@ impl Mattermost {
     /// # }
     /// ```
     pub fn new(
-        instance_url: &str,
+        instance_url: impl AsRef<str>,
         authentication_data: AuthenticationData,
     ) -> Result<Self, ApiError> {
-        let mut instance_url = Url::parse(instance_url)?;
+        let mut instance_url = Url::parse(instance_url.as_ref())?;
         let auth_token = authentication_data.token.clone();
 
         if instance_url.path() == "/" {
