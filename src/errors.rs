@@ -26,7 +26,7 @@ pub enum ApiError {
     #[error("Non-standard remote status code error")]
     StatusCodeError(u16),
     #[error("Websocket connection error")]
-    WebsocketError(#[from] async_tungstenite::tungstenite::Error),
+    WebsocketError(#[from] Box<async_tungstenite::tungstenite::Error>),
     #[error("Url parsing error")]
     UrlError(#[from] url::ParseError),
 }

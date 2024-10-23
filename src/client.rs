@@ -276,7 +276,9 @@ impl Mattermost {
         handler: H,
     ) -> Result<(), ApiError> {
         let url = self.ws_instance_url()?.join("websocket")?;
-        let (mut stream, _response) = async_tungstenite::tokio::connect_async(url).await?;
+        let (mut stream, _response) = async_tungstenite::tokio::connect_async(url)
+            .await
+            .map_err(|e| ApiError::WebsocketError(Box::new(e)))?;
         stream
             .send(Message::Text(serde_json::to_string(&json!({
               "seq": 1,
@@ -285,7 +287,8 @@ impl Mattermost {
                 "token": self.auth_token.as_ref().unwrap()
               }
             }))?))
-            .await?;
+            .await
+            .map_err(|e| ApiError::WebsocketError(Box::new(e)))?;
         loop {
             if let Some(event) = stream.next().await {
                 match event {
