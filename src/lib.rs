@@ -14,7 +14,7 @@
 //! use mattermost_api::prelude::*;
 //! # async fn run() {
 //! let auth = AuthenticationData::from_password("you@example.com", "password");
-//! let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
+//! let mut api = Mattermost::new("https://your-mattermost-instance.com", auth).unwrap();
 //! api.store_session_token().await.unwrap();
 //! let team_info = api.get_team("Best-Team-Ever").await.unwrap();
 //! # }
