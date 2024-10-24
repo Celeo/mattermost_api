@@ -1,6 +1,6 @@
 [package]
 name = "mattermost_api"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "Rust bindings for the Mattermost API"
 readme = "README.md"
@@ -23,6 +23,7 @@ serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
 thiserror = "1.0.30"
 tokio = { version = "1.15.0", features = ["full"], optional = true }
+url = "2.5.2"
 
 [features]
 default = ["native-tls", "ws-keep-alive"]

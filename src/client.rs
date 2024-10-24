@@ -10,7 +10,7 @@ use reqwest::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use std::str::FromStr;
+use url::Url;
 
 /// Authentication data, either a login_id and password
 /// or a personal access token. Required for being able
@@ -30,10 +30,10 @@ pub struct AuthenticationData {
 
 impl AuthenticationData {
     /// Create a struct instance from a user's login_id and password.
-    pub fn from_password(login_id: &str, password: &str) -> Self {
+    pub fn from_password(login_id: impl Into<String>, password: impl Into<String>) -> Self {
         Self {
-            login_id: Some(login_id.to_owned()),
-            password: Some(password.to_owned()),
+            login_id: Some(login_id.into()),
+            password: Some(password.into()),
             token: None,
         }
     }
@@ -41,11 +41,11 @@ impl AuthenticationData {
     /// Create a struct instance from a user's personal access token.
     ///
     /// Personal access tokens must be enabled per instance by an admin.
-    pub fn from_access_token(token: &str) -> Self {
+    pub fn from_access_token(token: impl Into<String>) -> Self {
         Self {
             login_id: None,
             password: None,
-            token: Some(token.to_owned()),
+            token: Some(token.into()),
         }
     }
 
@@ -65,7 +65,7 @@ impl AuthenticationData {
 /// Use the `new` function to create an instance of this struct.
 #[derive(Debug)]
 pub struct Mattermost {
-    pub(crate) instance_url: String,
+    pub(crate) instance_url: Url,
     pub(crate) authentication_data: AuthenticationData,
     pub(crate) client: Client,
     pub(crate) auth_token: Option<String>,
@@ -88,16 +88,25 @@ impl Mattermost {
     /// let api = Mattermost::new("https://your-mattermost-instance.com", auth);
     /// # }
     /// ```
-    pub fn new(instance_url: &str, authentication_data: AuthenticationData) -> Self {
+    pub fn new(
+        instance_url: impl AsRef<str>,
+        authentication_data: AuthenticationData,
+    ) -> Result<Self, ApiError> {
+        let mut instance_url = Url::parse(instance_url.as_ref())?;
         let auth_token = authentication_data.token.clone();
-        Self {
-            instance_url: instance_url.to_owned(),
+
+        if instance_url.path() == "/" {
+            instance_url.set_path("/api/v4/");
+        }
+
+        Ok(Self {
+            instance_url,
             authentication_data,
             client: Client::new(),
             auth_token,
             #[cfg(feature = "ws-keep-alive")]
             ping_interval: std::time::Duration::from_secs(30),
-        }
+        })
     }
 
     #[cfg(feature = "ws-keep-alive")]
@@ -122,7 +131,7 @@ impl Mattermost {
     /// use mattermost_api::prelude::*;
     /// # async fn run() {
     /// let auth = AuthenticationData::from_password("you@example.com", "password");
-    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth).unwrap();
     /// api.store_session_token().await.unwrap();
     /// # }
     /// ```
@@ -132,10 +141,10 @@ impl Mattermost {
             return Ok(());
         }
         debug!("Getting a session token from login_id and password");
-        let url = format!("{}/api/v4/users/login", self.instance_url);
+        let url = self.instance_url.join("users/login")?;
         let resp = self
             .client
-            .post(&url)
+            .post(url)
             .json(&json!({
                 "login_id": self.authentication_data.login_id.as_ref().unwrap(),
                 "password": self.authentication_data.password.as_ref().unwrap(),
@@ -169,6 +178,11 @@ impl Mattermost {
         Ok(map)
     }
 
+    /// Helper function for query that joins the instance url with an endpoint in an expected manner
+    fn endpoint_url(&self, endpoint: &str) -> Result<Url, ApiError> {
+        Ok(self.instance_url.join(endpoint.trim_start_matches('/'))?)
+    }
+
     /// Make a query to the Mattermost instance API.
     ///
     /// This method is "raw" in that the calling code must
@@ -187,14 +201,17 @@ impl Mattermost {
         query: Option<&[(&str, &str)]>,
         body: Option<&str>,
     ) -> Result<T, ApiError> {
-        let url = format!("{}/api/v4/{}", self.instance_url, endpoint);
+        let url = self.endpoint_url(endpoint)?;
+        let method = Method::try_from(method)?;
+
         debug!(
             "Making {} request to {} with query {:?}",
             method, url, query
         );
+
         let mut req_builder = self
             .client
-            .request(Method::from_str(method)?, &url)
+            .request(method, url.clone())
             .headers(self.request_headers()?)
             .query(query.unwrap_or(&[]));
         req_builder = match body {
@@ -219,6 +236,19 @@ impl Mattermost {
             return Err(ApiError::StatusCodeError(status));
         }
         Ok(resp.json().await?)
+    }
+
+    /// Helper-function for connect_to_websocket that convets http schemes to ws equivalent
+    fn ws_instance_url(&self) -> Result<Url, ApiError> {
+        let mut url = self.instance_url.clone();
+
+        match url.scheme() {
+            "http" => url.set_scheme("ws").ok(),
+            "https" => url.set_scheme("wss").ok(),
+            _ => None,
+        };
+
+        Ok(url)
     }
 
     /// Connect to the websocket API on the instance.
@@ -249,7 +279,7 @@ impl Mattermost {
     ///
     /// # async fn run() {
     /// let auth = AuthenticationData::from_password("you@example.com", "password");
-    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth);
+    /// let mut api = Mattermost::new("https://your-mattermost-instance.com", auth).unwrap();
     /// api.store_session_token().await.unwrap();
     /// api.connect_to_websocket(Handler {}).await.unwrap();
     /// # }
@@ -258,8 +288,10 @@ impl Mattermost {
         &mut self,
         handler: H,
     ) -> Result<(), ApiError> {
-        let url = format!("{}/api/v4/websocket", self.instance_url).replace("https", "wss");
-        let (mut stream, _response) = async_tungstenite::tokio::connect_async(url).await?;
+        let url = self.ws_instance_url()?.join("websocket")?;
+        let (mut stream, _response) = async_tungstenite::tokio::connect_async(url)
+            .await
+            .map_err(|e| ApiError::WebsocketError(Box::new(e)))?;
         stream
             .send(Message::Text(serde_json::to_string(&json!({
               "seq": 1,
@@ -428,7 +460,7 @@ impl Mattermost {
     ) -> Result<Vec<models::ChannelInformation>, ApiError> {
         let mut query: Vec<(&str, String)> = Vec::new();
         if let Some(v) = not_associated_to_group {
-            query.push(("not_associated_to_group", v.to_owned()));
+            query.push(("not_associated_to_group", v.into()));
         }
         if let Some(v) = page {
             query.push(("page", v.to_string()));
@@ -466,5 +498,92 @@ impl Mattermost {
     ) -> Result<Vec<models::ChannelInformation>, ApiError> {
         self.query("GET", &format!("teams/{}/channels", team_id), None, None)
             .await
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::{AuthenticationData, Mattermost};
+    use crate::errors::ApiError;
+
+    impl PartialEq for ApiError {
+        fn eq(&self, other: &Self) -> bool {
+            self.to_string() == other.to_string()
+        }
+    }
+
+    #[test]
+    fn invalid_instance_url_fails_fast() {
+        let Err(err) = Mattermost::new("herp derp", AuthenticationData::from_access_token("x"))
+        else {
+            panic!("Expected an error")
+        };
+
+        assert_eq!(err, ApiError::UrlError(url::ParseError::EmptyHost))
+    }
+
+    #[test]
+    fn api_v4_path_is_added_by_default() {
+        let client = Mattermost::new(
+            "http://www.mattermost.com",
+            AuthenticationData::from_access_token("x"),
+        )
+        .expect("This should work");
+
+        assert_eq!(
+            client.instance_url.as_str(),
+            "http://www.mattermost.com/api/v4/"
+        )
+    }
+
+    #[test]
+    fn api_path_can_be_overridden() {
+        let client = Mattermost::new(
+            "http://www.mattermost.com/ipa/v5/",
+            AuthenticationData::from_access_token("x"),
+        )
+        .expect("This should work");
+
+        assert_eq!(
+            client.instance_url.as_str(),
+            "http://www.mattermost.com/ipa/v5/"
+        )
+    }
+
+    #[test]
+    fn http_urls_are_properly_converted_to_ws_urls() {
+        let http_client = Mattermost::new(
+            "http://www.mattermost.com",
+            AuthenticationData::from_access_token("x"),
+        )
+        .unwrap();
+        assert_eq!(
+            http_client.ws_instance_url().unwrap().as_str(),
+            "ws://www.mattermost.com/api/v4/"
+        );
+
+        let https_client = Mattermost::new(
+            "https://www.mattermost.com/",
+            AuthenticationData::from_access_token("x"),
+        )
+        .unwrap();
+        assert_eq!(
+            https_client.ws_instance_url().unwrap().as_str(),
+            "wss://www.mattermost.com/api/v4/"
+        );
+    }
+
+    #[test]
+    fn endpoint_urls_are_joined_as_expected() {
+        let client = Mattermost::new(
+            "https://www.mattermost.com",
+            AuthenticationData::from_access_token("x"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            client.endpoint_url("/herp/derp").unwrap().as_str(),
+            "https://www.mattermost.com/api/v4/herp/derp",
+        );
     }
 }
