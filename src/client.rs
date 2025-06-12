@@ -204,10 +204,7 @@ impl Mattermost {
         let url = self.endpoint_url(endpoint)?;
         let method = Method::try_from(method)?;
 
-        debug!(
-            "Making {} request to {} with query {:?}",
-            method, url, query
-        );
+        debug!("Making {method} request to {url} with query {query:?}",);
 
         let mut req_builder = self
             .client
@@ -248,7 +245,7 @@ impl Mattermost {
     ) -> Result<T, ApiError> {
         let url = self.endpoint_url(endpoint)?;
 
-        debug!("Making post request to {} with query {:?}", url, query);
+        debug!("Making post request to {url} with query {query:?}");
 
         let req_builder = self
             .client
@@ -441,13 +438,12 @@ impl Mattermost {
 
     /// Get a team's information.
     pub async fn get_team(&self, id: &str) -> Result<models::TeamInformation, ApiError> {
-        self.query("GET", &format!("teams/{}", id), None, None)
-            .await
+        self.query("GET", &format!("teams/{id}"), None, None).await
     }
 
     /// Get information for a team by its name,
     pub async fn get_team_by_name(&self, name: &str) -> Result<models::TeamInformation, ApiError> {
-        self.query("GET", &format!("teams/name/{}", name), None, None)
+        self.query("GET", &format!("teams/name/{name}"), None, None)
             .await
     }
 
@@ -461,13 +457,8 @@ impl Mattermost {
         &self,
         user_id: &str,
     ) -> Result<Vec<models::TeamsUnreadInformation>, ApiError> {
-        self.query(
-            "GET",
-            &format!("users/{}/teams/unread", user_id),
-            None,
-            None,
-        )
-        .await
+        self.query("GET", &format!("users/{user_id}/teams/unread"), None, None)
+            .await
     }
 
     /// Get the number of unread messages and mentions for the specific team the user is in.
@@ -480,7 +471,7 @@ impl Mattermost {
     ) -> Result<models::TeamsUnreadInformation, ApiError> {
         self.query(
             "GET",
-            &format!("users/{}/teams/{}/unread", user_id, team_id),
+            &format!("users/{user_id}/teams/{team_id}/unread"),
             None,
             None,
         )
@@ -525,7 +516,7 @@ impl Mattermost {
         &self,
         channel_id: &str,
     ) -> Result<models::ChannelInformation, ApiError> {
-        self.query("GET", &format!("channels/{}", channel_id), None, None)
+        self.query("GET", &format!("channels/{channel_id}"), None, None)
             .await
     }
 
@@ -536,19 +527,23 @@ impl Mattermost {
         &self,
         team_id: &str,
     ) -> Result<Vec<models::ChannelInformation>, ApiError> {
-        self.query("GET", &format!("teams/{}/channels", team_id), None, None)
+        self.query("GET", &format!("teams/{team_id}/channels"), None, None)
             .await
     }
 
     /// Create a new post from the given body.
     ///
     /// ```rust,no_run
+    /// # use mattermost_api::{models, prelude::*};
+    /// # async fn execute() {
+    /// # let api = Mattermost::new("", AuthenticationData::from_password("", "")).unwrap();
     /// let body = models::PostBody {
     ///     channel_id: "some-channel-id".into(),
     ///     message: "Hello, channel!".into(),
     ///     root_id: None,
-    /// }
-    /// let response = mm_client.create_post(&body).await.unwrap();
+    /// };
+    /// let response = api.create_post(&body).await.unwrap();
+    /// # }
     /// ```
     /// Must have "create_post" permission for the channel the post is being created in.
     pub async fn create_post(&self, body: &models::PostBody) -> Result<models::Post, ApiError> {

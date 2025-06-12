@@ -11,9 +11,18 @@ jobs:
     if: |
       !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip ci]'))
     steps:
-    - uses: actions/checkout@v4
-    - uses: Swatinem/rust-cache@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
       with:
+        toolchain: nightly
+        override: true
+        components: rustfmt, clippy
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Cache Rust artifacts
+      uses: Swatinem/rust-cache@v2
+      with:
+        prefix-key: "0bfa5d0e-3e22-4c1e-9545-775a70de6dcd"
         save-if: ${{ github.ref == 'refs/heads/master' }}
     - name: Install clippy
       run: rustup component add clippy
@@ -21,3 +30,4 @@ jobs:
       run: cargo test --verbose --all
     - name: Run clippy
       run: cargo clippy
+
