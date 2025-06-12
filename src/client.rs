@@ -8,7 +8,7 @@ use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, Method,
 };
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
 use url::Url;
 
@@ -21,7 +21,7 @@ use url::Url;
 ///
 /// For more information, see the
 /// [Mattermost docs](https://api.mattermost.com/#tag/authentication).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthenticationData {
     pub(crate) login_id: Option<String>,
     pub(crate) password: Option<String>,
@@ -63,7 +63,7 @@ impl AuthenticationData {
 /// Struct to interact with a Mattermost instance API.
 ///
 /// Use the `new` function to create an instance of this struct.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Mattermost {
     pub(crate) instance_url: Url,
     pub(crate) authentication_data: AuthenticationData,
@@ -228,6 +228,45 @@ impl Mattermost {
             let status = resp.status().as_u16();
             // attempt to get the standard error information out and return that
             if let Ok(text) = resp.text().await {
+                debug!("{text}");
+                if let Ok(data) = serde_json::from_str::<MattermostError>(&text) {
+                    return Err(ApiError::MattermostApiError(data));
+                }
+            }
+            // fallback to generic HTTP status code error
+            return Err(ApiError::StatusCodeError(status));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Send a post request with a JSON body and optional query parameters.
+    pub async fn post<J: Serialize + ?Sized, T: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        query: Option<&[(&str, &str)]>,
+        body: &J,
+    ) -> Result<T, ApiError> {
+        let url = self.endpoint_url(endpoint)?;
+
+        debug!("Making post request to {} with query {:?}", url, query);
+
+        let req_builder = self
+            .client
+            .post(url.clone())
+            .headers(self.request_headers()?)
+            .query(query.unwrap_or(&[]))
+            .json(body);
+        let resp = self.client.execute(req_builder.build()?).await?;
+        if !resp.status().is_success() {
+            error!(
+                "Got status {} when requesting data from {}",
+                resp.status(),
+                url
+            );
+            let status = resp.status().as_u16();
+            // attempt to get the standard error information out and return that
+            if let Ok(text) = resp.text().await {
+                debug!("{text}");
                 if let Ok(data) = serde_json::from_str::<MattermostError>(&text) {
                     return Err(ApiError::MattermostApiError(data));
                 }
@@ -499,6 +538,21 @@ impl Mattermost {
     ) -> Result<Vec<models::ChannelInformation>, ApiError> {
         self.query("GET", &format!("teams/{}/channels", team_id), None, None)
             .await
+    }
+
+    /// Create a new post from the given body.
+    ///
+    /// ```rust,no_run
+    /// let body = models::PostBody {
+    ///     channel_id: "some-channel-id".into(),
+    ///     message: "Hello, channel!".into(),
+    ///     root_id: None,
+    /// }
+    /// let response = mm_client.create_post(&body).await.unwrap();
+    /// ```
+    /// Must have "create_post" permission for the channel the post is being created in.
+    pub async fn create_post(&self, body: &models::PostBody) -> Result<models::Post, ApiError> {
+        self.post("posts", None, body).await
     }
 }
 

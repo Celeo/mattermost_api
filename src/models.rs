@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Error struct from Mattermost.
 ///
@@ -15,7 +15,7 @@ pub struct MattermostError {
     pub message: String,
     pub request_id: String,
     pub status_code: i16,
-    pub is_oauth: bool,
+    pub is_oauth: Option<bool>,
 }
 
 /// Response struct from /teams/name/{name}
@@ -49,4 +49,29 @@ pub struct TeamsUnreadInformation {
 #[derive(Debug, Deserialize)]
 pub struct ChannelInformation {
     //
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Post {
+    pub id: String,
+    pub message: String,
+    pub create_at: i64,
+    pub update_at: i64,
+    pub delete_at: i64,
+    pub edit_at: i64,
+    pub user_id: String,
+    pub channel_id: String,
+    pub root_id: String,
+    pub original_id: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub hashtags: String,
+    pub pending_post_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PostBody {
+    pub channel_id: String,
+    pub message: String,
+    pub root_id: Option<String>,
 }
