@@ -1,6 +1,6 @@
 # mattermost_api
 
-[![CI](https://github.com/Celeo/mattermost_api/workflows/CI/badge.svg?branch=master)](https://github.com/celeo/mattermost_api/actions?query=workflow%3ACI)
+[![CI](https://github.com/Celeo/mattermost_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Celeo/mattermost_api/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/mattermost_api.svg)](https://crates.io/crates/mattermost_api)
 [![Docs.rs](https://docs.rs/mattermost_api/badge.svg)](https://docs.rs/mattermost_api)
 [![License](https://img.shields.io/crates/l/mattermost_api)](https://github.com/Celeo/mattermost_api/blob/master/Cargo.toml#L10)
