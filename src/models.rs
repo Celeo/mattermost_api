@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 /// Error struct from Mattermost.
 ///
-/// See [here] for more information.
+/// See [error handling] in the Mattermost documentation.
 ///
-/// [here]: https://api.mattermost.com/#tag/errors
+/// [error handling](https://developers.mattermost.com/api-documentation/#/#error-handling)
 #[derive(Debug, Deserialize)]
 pub struct MattermostError {
     pub id: String,
