@@ -3,7 +3,7 @@
 use crate::{models, prelude::*};
 use async_tungstenite::{tokio::ConnectStream, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, error};
+use log::{debug, error, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, Method,
@@ -412,12 +412,11 @@ impl Mattermost {
             Message::Text(text) => {
                 debug!("Non-reply text message received. Calling handler.");
 
-                let as_struct = serde_json::from_str(&text).map_err(|err| {
-                    error!("Could not parse websocket event JSON: {err}");
-                    ApiError::JsonProcessingError(err)
-                })?;
-
-                handler.callback(as_struct).await;
+                if let Ok(as_struct) = serde_json::from_str(&text).inspect_err(|err| {
+                    warn!("Could not parse websocket event JSON: {err}");
+                }) {
+                    handler.callback(as_struct).await;
+                };
 
                 Ok(false)
             }
