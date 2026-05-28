@@ -118,6 +118,12 @@ impl Mattermost {
         self
     }
 
+    /// Updates the client that is used for requests
+    pub fn with_client(mut self, client: Client) -> Self {
+        self.client = client;
+        self
+    }
+
     /// Get a session token from the stored login_id and password.
     /// Required when using login_id and password authentication,
     /// before making any calls to the instance API.
